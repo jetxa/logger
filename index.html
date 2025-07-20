@@ -420,23 +420,48 @@
         const importData = (event) => {
             const file = event.target.files[0];
             if (!file) return;
-            if (!confirm('警告：导入数据将覆盖当前所有记录，确定要继续吗？')) {
-                event.target.value = '';
+
+            // 修改确认提示，告知用户是追加而非覆盖
+            if (!confirm('确定要将文件中的记录追加到现有日志中吗？\n（ID 重复的记录将被跳过）')) {
+                event.target.value = ''; // 重置文件选择，以便下次还能选择同一个文件
                 return;
             }
+
             const reader = new FileReader();
             reader.onload = (e) => {
                 try {
-                    const importedData = JSON.parse(e.target.result);
-                    if (!Array.isArray(importedData)) throw new Error('JSON is not an array.');
-                    saveLogs(importedData);
-                    renderLogs();
-                    alert('数据导入成功！');
+                    const importedLogs = JSON.parse(e.target.result);
+                    if (!Array.isArray(importedLogs)) throw new Error('JSON is not an array.');
+
+                    // 获取现有日志和它们的ID
+                    const existingLogs = loadLogs();
+                    const existingIds = new Set(existingLogs.map(log => log.id));
+
+                    // 过滤出导入文件中不重复且有效的日志
+                    const newLogs = importedLogs.filter(log => log && log.id && !existingIds.has(log.id));
+                    
+                    const skippedCount = importedLogs.length - newLogs.length;
+
+                    if (newLogs.length > 0) {
+                        // 合并现有日志和新的日志
+                        const mergedLogs = existingLogs.concat(newLogs);
+                        saveLogs(mergedLogs);
+                        renderLogs();
+                        
+                        let successMessage = `成功导入 ${newLogs.length} 条新记录！`;
+                        if (skippedCount > 0) {
+                            successMessage += `\n跳过了 ${skippedCount} 条重复或无效的记录。`;
+                        }
+                        alert(successMessage);
+                    } else {
+                        alert(`导入完成。\n没有新的记录被添加（共 ${skippedCount} 条重复或无效的记录被跳过）。`);
+                    }
+
                 } catch (error) {
                     alert('导入失败！文件格式错误或已损坏。');
                     console.error('Import error:', error);
                 } finally {
-                    event.target.value = '';
+                    event.target.value = ''; // 确保每次都能触发 change 事件
                 }
             };
             reader.readAsText(file);
