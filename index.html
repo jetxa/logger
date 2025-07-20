@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Logger</title>
+    <style>
+        /* --- 基础样式 --- */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: #f0f2f5;
+            color: #1c1e21;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+        }
+        .container {
+            max-width: 680px;
+            width: 100%;
+            background-color: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            padding: 24px;
+        }
+
+        /* --- 页头样式 --- */
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        header h1 { font-size: 24px; color: #1877f2; margin: 0; }
+        .header-actions { display: flex; gap: 10px; }
+        .header-actions .btn { font-size: 14px; padding: 6px 12px; }
+
+        /* --- 输入区域 --- */
+        .input-area { display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px; }
+        .input-area textarea { width: 100%; height: 80px; padding: 12px; border: 1px solid #ccd0d5; border-radius: 6px; font-size: 16px; resize: vertical; box-sizing: border-box; }
+        .input-area textarea:focus { outline: none; border-color: #1877f2; box-shadow: 0 0 0 2px rgba(24, 119, 242, 0.2); }
+
+        /* --- 图片预览 --- */
+        #image-preview-container { position: relative; display: none; margin-top: 10px; }
+        #image-preview { max-width: 120px; max-height: 120px; border-radius: 8px; border: 1px solid #ddd; }
+        #remove-image-btn { position: absolute; top: -10px; right: -10px; background-color: white; color: #333; border: 1px solid #ccc; border-radius: 50%; width: 24px; height: 24px; font-size: 16px; line-height: 22px; text-align: center; cursor: pointer; font-weight: bold; }
+
+        /* --- 操作按钮 --- */
+        .actions { display: flex; justify-content: space-between; align-items: center; }
+        .action-buttons-left { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+        .btn { padding: 10px 20px; border: none; border-radius: 6px; font-size: 16px; font-weight: bold; cursor: pointer; transition: background-color 0.2s; }
+        .post-button { background-color: #1877f2; color: white; }
+        .post-button:hover { background-color: #166fe5; }
+        .secondary-button { background-color: #e4e6eb; color: #606770; }
+        .secondary-button:hover { background-color: #dadde1; }
+        .danger-button { background-color: #dc3545; color: white; }
+        .danger-button:hover { background-color: #c82333; }
+
+        /* --- 日志列表 --- */
+        #log-feed { list-style-type: none; padding: 0; margin: 0; }
+        .date-header { font-size: 16px; font-weight: bold; color: #606770; padding: 20px 0 10px 0; border-bottom: 1px solid #e0e0e0; }
+        .log-item { display: flex; flex-direction: column; gap: 8px; padding: 16px 0; border-bottom: 1px solid #e9ebee; transition: background-color 0.3s; }
+        .log-item.pinned { background-color: #fffbe6; padding-left: 10px; border-left: 3px solid #ffc107; }
+        .log-item:last-child { border-bottom: none; }
+        .log-item-main { display: flex; align-items: flex-start; gap: 16px; }
+        .log-timestamp { font-size: 16px; color: #90949c; flex-shrink: 0; width: 80px; }
+        .log-item-content { flex-grow: 1; }
+        .log-text { font-size: 16px; line-height: 1.5; white-space: pre-wrap; word-wrap: break-word; margin: 0; }
+        .log-image { max-width: 100%; height: auto; border-radius: 8px; margin-top: 10px; cursor: pointer; }
+        
+        .edited-timestamp { font-size: 13px; color: #90949c; font-style: italic; margin-top: 8px; text-align: right; }
+        .log-item-actions { display: flex; justify-content: flex-end; align-items: center; gap: 10px; margin-top: 8px; }
+        .action-link { background: none; border: none; color: #606770; font-size: 14px; cursor: pointer; padding: 4px 8px; border-radius: 4px; }
+        .action-link:hover { background-color: #e4e6eb; }
+        
+        /* --- 评论区样式 --- */
+        .comments-section { margin-top: 12px; padding-left: 20px; border-left: 2px solid #e9ebee; }
+        .comment-list { list-style-type: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; }
+        .comment-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 10px;
+            background-color: #f7f8fa;
+            padding: 8px 12px;
+            border-radius: 8px;
+        }
+        .comment-content { flex-grow: 1; }
+        .comment-text { font-style: italic; font-size: 15px; word-wrap: break-word; }
+        .comment-meta { font-size: 13px; color: #90949c; margin-top: 4px; }
+        .comment-input-area { display: none; margin-top: 10px; }
+        .comment-input-area textarea { width: 100%; font-size: 14px; padding: 8px; border-radius: 6px; border: 1px solid #ccd0d5; resize: vertical; box-sizing: border-box; }
+        .comment-input-area button { font-size: 14px; padding: 6px 12px; margin-top: 5px; }
+        
+        /* --- 编辑模态框样式 --- */
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.6); display: none; align-items: center; justify-content: center; z-index: 1000; }
+        .modal-content { background: white; padding: 24px; border-radius: 8px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); width: 90%; max-width: 500px; }
+        .modal-content h2 { margin-top: 0; }
+        .modal-content textarea { width: 100%; height: 150px; }
+        .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <header>
+            <h1>Logger</h1>
+            <div class="header-actions">
+                <button id="import-btn" class="btn secondary-button">导入</button>
+                <input type="file" id="import-input" accept=".json,application/json" style="display: none;">
+                <button id="export-btn" class="btn secondary-button">导出</button>
+            </div>
+        </header>
+
+        <section class="input-area">
+            <textarea id="log-input" placeholder="记录下这一刻..."></textarea>
+            <div id="image-preview-container">
+                <img id="image-preview" src="" alt="Image preview">
+                <button id="remove-image-btn" title="移除图片">×</button>
+            </div>
+            <div class="actions">
+                <div class="action-buttons-left">
+                    <button id="add-image-btn" class="btn secondary-button">添加图片</button>
+                    <input type="file" id="image-input" accept="image/*" style="display: none;">
+                    <button id="clear-all-btn" class="btn danger-button">清空所有</button>
+                </div>
+                <button id="post-btn" class="btn post-button">发布</button>
+            </div>
+        </section>
+        <section class="feed-area"><ul id="log-feed"></ul></section>
+    </div>
+
+    <!-- 编辑模态框 -->
+    <div id="edit-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h2>编辑记录</h2>
+            <textarea id="edit-log-text" class="input-area textarea"></textarea>
+            <div class="modal-actions">
+                <button id="cancel-edit-btn" class="btn secondary-button">取消</button>
+                <button id="save-edit-btn" class="btn post-button">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        // --- DOM 元素获取 ---
+        const logInput = document.getElementById('log-input');
+        const postButton = document.getElementById('post-btn');
+        const clearAllButton = document.getElementById('clear-all-btn');
+        const logFeed = document.getElementById('log-feed');
+        const addImageBtn = document.getElementById('add-image-btn');
+        const imageInput = document.getElementById('image-input');
+        const imagePreviewContainer = document.getElementById('image-preview-container');
+        const imagePreview = document.getElementById('image-preview');
+        const removeImageBtn = document.getElementById('remove-image-btn');
+        const editModal = document.getElementById('edit-modal');
+        const editLogText = document.getElementById('edit-log-text');
+        const saveEditBtn = document.getElementById('save-edit-btn');
+        const cancelEditBtn = document.getElementById('cancel-edit-btn');
+        const importBtn = document.getElementById('import-btn');
+        const importInput = document.getElementById('import-input');
+        const exportBtn = document.getElementById('export-btn');
+
+        // --- 状态和配置 ---
+        const STORAGE_KEY = 'my_local_log';
+        let currentImageBase64 = null;
+        let editingLogId = null;
+
+        // --- 数据处理 ---
+        const loadLogs = () => JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+        const saveLogs = (logs) => localStorage.setItem(STORAGE_KEY, JSON.stringify(logs));
+
+        // --- 格式化辅助函数 ---
+        const formatDateHeader = (d) => d.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
+        const formatTime = (d) => d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+        const formatDateTime = (d) => d.toLocaleString('zh-CN', { year: '2-digit', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).replace(/\//g, '-');
+
+        // --- 核心渲染逻辑 ---
+        const renderLogs = () => {
+            logFeed.innerHTML = '';
+            let logs = loadLogs();
+            
+            logs.sort((a, b) => {
+                if (a.isPinned !== b.isPinned) {
+                    return a.isPinned ? -1 : 1;
+                }
+                return new Date(b.timestamp) - new Date(a.timestamp);
+            });
+
+            let lastDate = null;
+            logs.forEach(log => {
+                const logDate = new Date(log.timestamp);
+                const logDateString = logDate.toDateString();
+                if (logDateString !== lastDate) {
+                    const dateHeader = document.createElement('li');
+                    dateHeader.className = 'date-header';
+                    dateHeader.textContent = formatDateHeader(logDate);
+                    logFeed.appendChild(dateHeader);
+                    lastDate = logDateString;
+                }
+                const logItem = createLogElement(log, logDate);
+                logFeed.appendChild(logItem);
+            });
+        };
+
+        // --- 创建日志元素 ---
+        const createLogElement = (log, dateObject) => {
+            const li = document.createElement('li');
+            li.className = 'log-item';
+            li.dataset.id = log.id;
+            
+            if (log.isPinned) {
+                li.classList.add('pinned');
+            }
+
+            const textContent = log.text ? `<p class="log-text">${log.text.replace(/\n/g, '<br>')}</p>` : '';
+            const imageContent = log.image ? `<img src="${log.image}" class="log-image" alt="日志图片">` : '';
+            
+            let editedTimestampContent = '';
+            if (log.lastEditedTimestamp) {
+                const editedDate = new Date(log.lastEditedTimestamp);
+                editedTimestampContent = `<div class="edited-timestamp">最后编辑于 ${formatDateTime(editedDate)}</div>`;
+            }
+
+            // 评论带上删除按钮
+            let commentsContent = '';
+            if (log.comments && log.comments.length > 0) {
+                const commentItems = log.comments.map(comment => {
+                    const commentDate = new Date(comment.timestamp);
+                    return `
+                        <li class="comment-item">
+                            <div class="comment-content">
+                                <div class="comment-text">${comment.text.replace(/\n/g, '<br>')}</div>
+                                <div class="comment-meta">${formatDateTime(commentDate)}</div>
+                            </div>
+                            <button class="action-link delete-comment-btn" data-comment-id="${comment.id}" title="删除评论">删除</button>
+                        </li>`;
+                }).join('');
+                commentsContent = `<ul class="comment-list">${commentItems}</ul>`;
+            }
+
+            const pinButtonText = log.isPinned ? '取消置顶' : '置顶';
+
+            li.innerHTML = `
+                <div class="log-item-main">
+                    <div class="log-timestamp">${formatTime(dateObject)}</div>
+                    <div class="log-item-content">
+                        ${textContent}
+                        ${imageContent}
+                        ${editedTimestampContent}
+                    </div>
+                </div>
+                <div class="log-item-actions">
+                    <button class="action-link pin-btn">${pinButtonText}</button>
+                    <button class="action-link comment-btn">评论</button>
+                    <button class="action-link edit-btn">编辑</button>
+                    <button class="action-link delete-btn">删除</button>
+                </div>
+                <div class="comments-section">
+                    ${commentsContent}
+                    <div class="comment-input-area">
+                        <textarea placeholder="添加评论..."></textarea>
+                        <button class="btn post-button post-comment-btn">提交</button>
+                    </div>
+                </div>
+            `;
+
+            // --- 绑定事件 ---
+            li.querySelector('.pin-btn').addEventListener('click', () => togglePin(log.id));
+            li.querySelector('.delete-btn').addEventListener('click', () => deleteLog(log.id));
+            li.querySelector('.edit-btn').addEventListener('click', () => openEditModal(log.id));
+            li.querySelector('.comment-btn').addEventListener('click', (e) => {
+                const commentInputArea = e.target.closest('.log-item').querySelector('.comment-input-area');
+                commentInputArea.style.display = commentInputArea.style.display === 'block' ? 'none' : 'block';
+                if (commentInputArea.style.display === 'block') {
+                    commentInputArea.querySelector('textarea').focus();
+                }
+            });
+            li.querySelector('.post-comment-btn').addEventListener('click', (e) => {
+                const textarea = e.target.previousElementSibling;
+                addComment(log.id, textarea.value);
+            });
+            const img = li.querySelector('.log-image');
+            if (img) img.addEventListener('click', () => window.open(img.src));
+            
+            // 为所有评论删除按钮绑定事件
+            li.querySelectorAll('.delete-comment-btn').forEach(button => {
+                button.addEventListener('click', () => {
+                    const commentId = parseInt(button.dataset.commentId, 10);
+                    deleteComment(log.id, commentId);
+                });
+            });
+
+            return li;
+        };
+        
+        // --- 图片处理 ---
+        const processImageFile = (file) => {
+            if (!file || !file.type.startsWith('image/')) return;
+            if (file.size > 5 * 1024 * 1024) { alert('图片太大了！请选择小于 5MB 的图片。'); return; }
+            const reader = new FileReader();
+            reader.onloadend = () => { currentImageBase64 = reader.result; imagePreview.src = reader.result; imagePreviewContainer.style.display = 'block'; };
+            reader.readAsDataURL(file);
+        };
+        const handleImageSelection = (event) => processImageFile(event.target.files[0]);
+        const handlePaste = (event) => {
+            const items = (event.clipboardData || window.clipboardData).items;
+            for (let item of items) { if (item.kind === 'file' && item.type.startsWith('image/')) { processImageFile(item.getAsFile()); event.preventDefault(); break; } }
+        };
+        const resetImageSelection = () => { currentImageBase64 = null; imageInput.value = ''; imagePreviewContainer.style.display = 'none'; imagePreview.src = ''; };
+
+        // --- 核心事件处理函数 ---
+        const postNewLog = () => {
+            const text = logInput.value.trim();
+            if (text === '' && !currentImageBase64) { alert('内容或图片至少要有一个！'); return; }
+            const newLog = {
+                id: Date.now(),
+                text: text,
+                timestamp: new Date().toISOString(),
+                image: currentImageBase64,
+                comments: [],
+                lastEditedTimestamp: null,
+                isPinned: false
+            };
+            let logs = loadLogs();
+            logs.push(newLog);
+            saveLogs(logs);
+            renderLogs();
+            logInput.value = '';
+            resetImageSelection();
+            logInput.focus();
+        };
+
+        const deleteLog = (id) => { if (!confirm('确定要删除这条记录吗？')) return; let logs = loadLogs().filter(log => log.id !== id); saveLogs(logs); renderLogs(); };
+        const clearAllLogs = () => { if (confirm('警告：这将永久删除所有记录，确定要清空吗？')) { localStorage.removeItem(STORAGE_KEY); renderLogs(); } };
+
+        const openEditModal = (id) => {
+            const logToEdit = loadLogs().find(log => log.id === id);
+            if (logToEdit) { editingLogId = id; editLogText.value = logToEdit.text; editModal.style.display = 'flex'; editLogText.focus(); }
+        };
+        const closeEditModal = () => { editingLogId = null; editModal.style.display = 'none'; };
+
+        const saveEditedLog = () => {
+            if (!editingLogId) return;
+            const newText = editLogText.value.trim();
+            let logs = loadLogs();
+            const logIndex = logs.findIndex(log => log.id === editingLogId);
+            if (logIndex > -1) {
+                if (logs[logIndex].text !== newText) {
+                    logs[logIndex].text = newText;
+                    logs[logIndex].lastEditedTimestamp = new Date().toISOString();
+                }
+                saveLogs(logs);
+                renderLogs();
+                closeEditModal();
+            }
+        };
+        
+        const addComment = (logId, text) => {
+            const commentText = text.trim();
+            if (commentText === '') { alert('评论内容不能为空！'); return; }
+            let logs = loadLogs();
+            const logIndex = logs.findIndex(log => log.id === logId);
+            if (logIndex > -1) {
+                const newComment = { id: Date.now(), text: commentText, timestamp: new Date().toISOString() };
+                if (!logs[logIndex].comments) logs[logIndex].comments = [];
+                logs[logIndex].comments.push(newComment);
+                saveLogs(logs);
+                renderLogs();
+            }
+        };
+        
+        // --- 删除评论函数 ---
+        const deleteComment = (logId, commentId) => {
+            if (!confirm('确定要删除这条评论吗？')) return;
+            let logs = loadLogs();
+            const logIndex = logs.findIndex(log => log.id === logId);
+            if (logIndex > -1 && logs[logIndex].comments) {
+                // 过滤掉要删除的评论，而不是用 findIndex + splice，这样更简洁
+                logs[logIndex].comments = logs[logIndex].comments.filter(c => c.id !== commentId);
+                saveLogs(logs);
+                renderLogs();
+            }
+        };
+
+        const togglePin = (id) => {
+            let logs = loadLogs();
+            const logIndex = logs.findIndex(log => log.id === id);
+            if (logIndex > -1) {
+                if (typeof logs[logIndex].isPinned === 'undefined') {
+                    logs[logIndex].isPinned = false;
+                }
+                logs[logIndex].isPinned = !logs[logIndex].isPinned;
+                saveLogs(logs);
+                renderLogs();
+            }
+        };
+
+        // --- 导入/导出功能 ---
+        const exportData = () => {
+            const logs = localStorage.getItem(STORAGE_KEY);
+            if (!logs || logs === '[]') {
+                alert('没有数据可导出。');
+                return;
+            }
+            const blob = new Blob([logs], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            const today = new Date();
+            const dateString = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}-${today.getDate().toString().padStart(2, '0')}`;
+            a.href = url;
+            a.download = `logger_app_data_${dateString}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        };
+
+        const importData = (event) => {
+            const file = event.target.files[0];
+            if (!file) return;
+            if (!confirm('警告：导入数据将覆盖当前所有记录，确定要继续吗？')) {
+                event.target.value = '';
+                return;
+            }
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const importedData = JSON.parse(e.target.result);
+                    if (!Array.isArray(importedData)) throw new Error('JSON is not an array.');
+                    saveLogs(importedData);
+                    renderLogs();
+                    alert('数据导入成功！');
+                } catch (error) {
+                    alert('导入失败！文件格式错误或已损坏。');
+                    console.error('Import error:', error);
+                } finally {
+                    event.target.value = '';
+                }
+            };
+            reader.readAsText(file);
+        };
+
+        // --- 事件监听器 ---
+        addImageBtn.addEventListener('click', () => imageInput.click());
+        imageInput.addEventListener('change', handleImageSelection);
+        logInput.addEventListener('paste', handlePaste);
+        removeImageBtn.addEventListener('click', resetImageSelection);
+        postButton.addEventListener('click', postNewLog);
+        logInput.addEventListener('keydown', (e) => { if (e.ctrlKey && e.key === 'Enter') { e.preventDefault(); postNewLog(); } });
+        clearAllButton.addEventListener('click', clearAllLogs);
+        saveEditBtn.addEventListener('click', saveEditedLog);
+        cancelEditBtn.addEventListener('click', closeEditModal);
+        editModal.addEventListener('click', (e) => { if (e.target === editModal) closeEditModal(); });
+        exportBtn.addEventListener('click', exportData);
+        importBtn.addEventListener('click', () => importInput.click());
+        importInput.addEventListener('change', importData);
+
+        // 初始加载
+        renderLogs();
+    });
+    </script>
+</body>
+</html>
